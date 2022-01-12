@@ -469,6 +469,11 @@ class SMCMotorHW(object):
         self.port = port
         self._motions = {}
 
+    def getRevision(self, axis):
+        motion = self._motions.get(axis)
+        if motion is None:
+            raise ValueError('motion not set for this axis')
+        return motion.get_controller_revision()
 
     def getMotion(self, axis):
         motion = self._motions.get(axis)
@@ -509,9 +514,9 @@ class SMCMotorHW(object):
         motion = self.getMotion(axis)
         motion.move_relative_mm(position, waitStop)
 
-    def home(self, axis):
+    def home(self, axis, waitStop=True):
         motion = self.getMotion(axis)
-        motion.home()
+        motion.home(waitStop)
 
 
     def stop(self, axis):

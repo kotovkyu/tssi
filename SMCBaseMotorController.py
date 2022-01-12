@@ -113,6 +113,7 @@ class SMCBaseMotorController(MotorController):
         :param cmd: string
         :return: string (MANDATORY to avoid OMNI ORB exception)
         """
+        response = '' #SendToCtrl must return String, not documented well
         # Get the process to send
         mode = cmd.split(' ')[0].lower()
         args = cmd.strip().split(' ')[1:]
@@ -127,10 +128,8 @@ class SMCBaseMotorController(MotorController):
                     raise ValueError('Invalid number of arguments')
             except Exception as e:
                 self._log.error(e)
-
 #            self._log.info('Starting homing for axis {:d} in direction id {:d}'.format(axis, direction))
             self._log.info('Starting homing for axis {:d}'.format(axis))
- 
             try:
                 self.smc100.home(axis)
 #                if direction == 0:
@@ -139,6 +138,19 @@ class SMCBaseMotorController(MotorController):
 #                    self.axis_extra_pars[axis]['Proxy'].command_inout("homing_plus")
             except Exception as e:
                 self._log.error(e)
+        elif mode == 'revision':
+            try:
+                if len(args) == 1:
+                    axis, = args
+                    axis = int(axis)
+                else:
+                    raise ValueError('Invalid number of arguments')
+            except Exception as e:
+                self._log.error(e)
+
+            response = self.smc100.getRevision(axis)
+
+        return response
 
     def SetAxisPar(self, axis, name, value):
         """ Set the standard pool motor parameters.
