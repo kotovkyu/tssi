@@ -98,6 +98,10 @@ class SMCBaseMotorController(MotorController):
 
     def StartOne(self, axis, position):
         """Move the specified motor to the specified position"""
+        low = self.attributes[axis]['lower_limit']
+        upp = self.attributes[axis]['upper_limit']
+        if(position < low or position > upp):
+            raise ValueError('Invalid position: exceed lower or upper limit')
         self.smc100.move(axis, position)
 
     def StopOne(self, axis):
@@ -159,10 +163,16 @@ class SMCBaseMotorController(MotorController):
         @param value to be set
         """
         par_name = name.lower()
+        spu = float(value)
+
         if par_name == 'step_per_unit':
             self.attributes[axis]['step_per_unit_set'] = True
-            spu = float(value)
             self.attributes[axis]['step_per_unit'] = spu
+        elif name == 'acceleration':
+            self.smc100.setAcceleration(axis, spu)
+        elif name == 'velocity':
+            self.smc100.setVelocity(axis, spu)
+
 #        elif name == 'lower_limit':
 #            self.attributes[axis]['lower_limit'] = float(value)
 #        elif name == 'upper_limit':
@@ -178,6 +188,11 @@ class SMCBaseMotorController(MotorController):
         par_name = name.lower()
         if par_name == 'step_per_unit':
             value = self.attributes[axis]['step_per_unit']
+        elif name == 'acceleration':
+            value = self.smc100.getAcceleration(axis)
+        elif name == 'velocity':
+            value = self.smc100.getVelocity(axis)
+
 #        elif name == 'lower_limit':
 #            value = self.attributes[axis]['lower_limit']
 #        elif name == 'upper_limit':

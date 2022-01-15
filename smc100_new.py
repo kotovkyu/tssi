@@ -219,6 +219,25 @@ class SMC100(object):
 
     return errors, state
 
+  def get_acceleration(self):
+    acc_value = float(self.sendcmd('AC', '?', expect_response=True, retry=10))
+    return acc_value
+
+  def set_acceleration(self, acc_value):
+    if(acc_value<=10e-06 or acc_value>=10): #10e12):
+        raise ValueError('Wrong acceleration value')
+    self.sendcmd('AC', acc_value)
+
+  def get_velocity(self):
+    vel_value = float(self.sendcmd('VA', '?', expect_response=True, retry=10))
+    return vel_value
+
+  def set_velocity(self, vel_value):
+    if(vel_value<=10e-06 or vel_value>=2): #10e12):
+        raise ValueError('Wrong velocity value')
+    self.sendcmd('VA', vel_value)
+
+
   def get_position_mm(self):
     dist_mm = float(self.sendcmd('TP', '?', expect_response=True, retry=10))
     return dist_mm
@@ -510,9 +529,26 @@ class SMCMotorHW(object):
 #        motion.offset = position - motion.getCurrentUserPosition()
 #        motion.setCurrentUserPosition(position)
 
+    def getAcceleration(self, axis):
+        motion = self.getMotion(axis)
+        return motion.get_acceleration()
+
+    def setAcceleration(self, axis, acc_value):
+        motion = self.getMotion(axis)
+        return motion.set_acceleration(acc_value)
+
+    def getVelocity(self, axis):
+        motion = self.getMotion(axis)
+        return motion.get_velocity()
+
+    def setVelocity(self, axis, vel_value):
+        motion = self.getMotion(axis)
+        return motion.set_velocity(vel_value)
+
+
     def move(self, axis, position, waitStop=True):
         motion = self.getMotion(axis)
-        motion.move_relative_mm(position, waitStop)
+        motion.move_absolute_mm(position, waitStop)
 
     def home(self, axis, waitStop=True):
         motion = self.getMotion(axis)
