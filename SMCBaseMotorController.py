@@ -21,8 +21,8 @@ class SMCBaseMotorController(MotorController):
     # The properties used to connect to the SMC100 motor controller
     ctrl_properties = {
                  'Port' : { Type : str,
-                            Description : "port name",
-                            DefaultValue: "/dev/ttyUSB0" }
+                            Description : 'port name',
+                            DefaultValue: '/dev/ttyUSB0' }
              }
 
     axis_attributes = \
@@ -32,7 +32,10 @@ class SMCBaseMotorController(MotorController):
                             DefaultValue: 2 },
                  'upper_limit' : { Type : float,
                             Description : 'motor upper limit, mm',
-                            DefaultValue: 20 }
+                            DefaultValue: 20 },
+                 'revision' : { Type : str,
+                            Description : 'name of motor controller',
+                            DefaultValue: 'None' }
              }
 
 
@@ -62,12 +65,14 @@ class SMCBaseMotorController(MotorController):
     def AddDevice(self, axis):
         self.attributes[axis] = {}
 #        self.attributes[position_value] = None
-        self.attributes[axis]['step_per_unit'] = 1
+        self.attributes[axis]['step_per_unit'] = 0
         self.attributes[axis]['step_per_unit_set'] = False
         self.attributes[axis]['lower_limit'] = 2
         self.attributes[axis]['upper_limit'] = 20
-
-
+        self.attributes[axis]['offset'] = 0
+        self.attributes[axis]['revision'] = self.smc100.getRevision(axis)
+#        print(self.attributes[axis]['revision'])
+#        print(self.smc100.getRevision(axis))
         self._motors[axis] = True
 
     def DeleteDevice(self, axis):
@@ -100,6 +105,14 @@ class SMCBaseMotorController(MotorController):
         """Move the specified motor to the specified position"""
         low = self.attributes[axis]['lower_limit']
         upp = self.attributes[axis]['upper_limit']
+#        offset = self.attributes[axis]['offset']
+
+#        new_position = position
+#        if(offset>=0):
+#            new_position = position + offset
+        print(position)
+#        print(new_position)
+#        print(offset)
         if(position < low or position > upp):
             raise ValueError('Invalid position: exceed lower or upper limit')
         self.smc100.move(axis, position)
@@ -151,7 +164,6 @@ class SMCBaseMotorController(MotorController):
                     raise ValueError('Invalid number of arguments')
             except Exception as e:
                 self._log.error(e)
-
             response = self.smc100.getRevision(axis)
 
         return response
@@ -172,6 +184,8 @@ class SMCBaseMotorController(MotorController):
             self.smc100.setAcceleration(axis, spu)
         elif name == 'velocity':
             self.smc100.setVelocity(axis, spu)
+        elif name == 'offset':
+            self.attributes[axis]['offset'] = spu
 
 #        elif name == 'lower_limit':
 #            self.attributes[axis]['lower_limit'] = float(value)
@@ -192,49 +206,34 @@ class SMCBaseMotorController(MotorController):
             value = self.smc100.getAcceleration(axis)
         elif name == 'velocity':
             value = self.smc100.getVelocity(axis)
-
-#        elif name == 'lower_limit':
-#            value = self.attributes[axis]['lower_limit']
-#        elif name == 'upper_limit':
-#            value = self.attributes[axis]['upper_limit']
+        elif name == 'offset':
+            value = self.attributes[axis]['offset']
         return value
 
     def GetAxisExtraPar(self, axis, name):
         par_name = name.lower()
-#        if par_name == 'step_per_unit':
-#            value = self.attributes[axis]['step_per_unit']
         if par_name == 'lower_limit':
             value = self.attributes[axis]['lower_limit']
         elif par_name == 'upper_limit':
             value = self.attributes[axis]['upper_limit']
+        elif par_name == 'revision':
+            value = self.attributes[axis]['revision']
+#            value = self.smc100.getRevision(axis)
         return value
 
 
-#        name = name.lower()
-#        if name == 'lower_limit':
-#            return self._lower_limit[axis]
-#        elif name == 'upper_limit':
-#            return self._upper_limit[axis]
 
     def SetAxisExtraPar(self, axis, name, value):
         par_name = name.lower()
-#        if par_name == 'step_per_unit':
-#            self.attributes[axis]['step_per_unit_set'] = True
-#            spu = float(value)
-#            self.attributes[axis]['step_per_unit'] = spu
         if par_name == 'lower_limit':
             self.attributes[axis]['lower_limit'] = float(value)
         elif par_name == 'upper_limit':
             self.attributes[axis]['upper_limit'] = float(value)
+        elif par_name == 'revision':
+            pass
+#            self.attributes[axis]['revision'] = str(value)
 
 
-#        name = name.lower()
-#        if name == 'encodersource':
-#            self._encodersource[axis] = value
-#        if name == 'lower_limit':
-#            self._lower_limit[axis] = value
-#        if name == 'upper_limit':
-#            self._upper_limit[axis] = value
 
 
 

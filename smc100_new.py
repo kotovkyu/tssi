@@ -225,7 +225,7 @@ class SMC100(object):
 
   def set_acceleration(self, acc_value):
     if(acc_value<=10e-06 or acc_value>=10): #10e12):
-        raise ValueError('Wrong acceleration value')
+        raise ValueError('Wrong acceleration value: acc_value<=10e-06 or acc_value>=10')
     self.sendcmd('AC', acc_value)
 
   def get_velocity(self):
@@ -234,7 +234,7 @@ class SMC100(object):
 
   def set_velocity(self, vel_value):
     if(vel_value<=10e-06 or vel_value>=2): #10e12):
-        raise ValueError('Wrong velocity value')
+        raise ValueError('Wrong velocity value: vel_value<=10e-06 or vel_value>=2')
     self.sendcmd('VA', vel_value)
 
 
@@ -489,7 +489,7 @@ class SMCMotorHW(object):
         self._motions = {}
 
     def getRevision(self, axis):
-        motion = self._motions.get(axis)
+        motion = self.getMotion(axis)
         if motion is None:
             raise ValueError('motion not set for this axis')
         return motion.get_controller_revision()
