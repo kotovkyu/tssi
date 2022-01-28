@@ -224,7 +224,7 @@ class SMC100(object):
     return acc_value
 
   def set_acceleration(self, acc_value):
-    if(acc_value<=10e-06 or acc_value>=10): #10e12):
+    if(acc_value<=10e-06 or acc_value>=10): #10e12 in doc):
         raise ValueError('Wrong acceleration value: acc_value<=10e-06 or acc_value>=10')
     self.sendcmd('AC', acc_value)
 
@@ -233,7 +233,7 @@ class SMC100(object):
     return vel_value
 
   def set_velocity(self, vel_value):
-    if(vel_value<=10e-06 or vel_value>=2): #10e12):
+    if(vel_value<=10e-06 or vel_value>=2): #10e12 in doc):
         raise ValueError('Wrong velocity value: vel_value<=10e-06 or vel_value>=2')
     self.sendcmd('VA', vel_value)
 
@@ -512,6 +512,8 @@ class SMCMotorHW(object):
         motion._emit('in state %s'%(state))
         if state==STATE_MOVING:
             return 2
+        if state==STATE_READY_FROM_MOVING:
+            return 3
 #        if motion.hitLowerLimit():
 #            return 3
 #        if motion.hitUpperLimit():

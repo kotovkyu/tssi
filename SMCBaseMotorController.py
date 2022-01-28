@@ -95,11 +95,11 @@ class SMCBaseMotorController(MotorController):
         smc100 = self.smc100
         state = smc100.getState(axis)
         if state == 1:
-            return State.On, "Motor is stopped"
+            return State.On, "Unknown state"
         elif state == 2:
             return State.Moving, "Motor is moving"
         elif state == 3:
-            return State.Fault, "Motor has an error"
+            return State.Fault, "Motor in target position"
 
     def StartOne(self, axis, position):
         """Move the specified motor to the specified position"""
@@ -115,7 +115,7 @@ class SMCBaseMotorController(MotorController):
 #        print(offset)
         if(position < low or position > upp):
             raise ValueError('Invalid position: exceed lower or upper limit')
-        self.smc100.move(axis, position)
+        self.smc100.move(axis, position, waitStop=False) #we dont want to wait until reach position...
 
     def StopOne(self, axis):
         """Stop the specified motor"""
