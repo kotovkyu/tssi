@@ -112,8 +112,7 @@ class SMC100(object):
 
     self._last_sendcmd_time = 0
 
-#    print 'Connecting to SMC100 on %s'%(port)
-    print('Connecting to SMC100 on %s', port)
+    print('Connecting to SMC100 on %s' % port)
 
     self._port = serial.Serial(
         port = port,
@@ -123,6 +122,11 @@ class SMC100(object):
         parity = 'N',
         xonxoff = True,
         timeout = 0.050)
+
+    if self._port.isOpen():
+        print('Serial port is opened.')
+    else:
+        print('Failed to open serial port.')
 
     self._smcID = str(smcID)
 
@@ -509,18 +513,23 @@ class SMCMotorHW(object):
         motion = self.getMotion(axis)
         #motion.get_position_mm() #getCurrentUserPosition()
         state = motion.get_status()[1]
+#        print(state)
         motion._emit('in state %s'%(state))
-        if state==STATE_MOVING:
-            return 2
         if state==STATE_READY_FROM_MOVING:
-            return 3
+            return 1
+        elif state==STATE_MOVING:
+            return 2
+        elif state==STATE_NOT_REFERENCED_FROM_RESET:
+            raise ValueError('Motor blocked, need to be homed after reset power.')
+        return state
+#            return 1
+
 #        if motion.hitLowerLimit():
 #            return 3
 #        if motion.hitUpperLimit():
 #            return 3
 #        if not motion.hasPower():
 #            return 4
-        return 1
 
     def getPosition(self, axis):
         motion = self.getMotion(axis)

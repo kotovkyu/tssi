@@ -49,7 +49,7 @@ class SMCBaseMotorController(MotorController):
             inst, props, *args, **kwargs)
         self._log.info('SMC100 Motor Controller Initialization ...')
         self.smc100 = SMCMotorHW(self.Port)
-        print('SUCCESS')
+        print('Init: SUCCESS')
 #        print(self.lower_limit,self.upper_limit)
 
         # do some initialization
@@ -92,14 +92,13 @@ class SMCBaseMotorController(MotorController):
 
     def StateOne(self, axis):
         """Get the specified motor state"""
-        smc100 = self.smc100
-        state = smc100.getState(axis)
+        state = self.smc100.getState(axis)
         if state == 1:
-            return State.On, "Unknown state"
+            return State.On, "Motor in target position"
         elif state == 2:
             return State.Moving, "Motor is moving"
         elif state == 3:
-            return State.Fault, "Motor in target position"
+            return State.Unknown, "Unknown state"
 
     def StartOne(self, axis, position):
         """Move the specified motor to the specified position"""
@@ -110,7 +109,7 @@ class SMCBaseMotorController(MotorController):
 #        new_position = position
 #        if(offset>=0):
 #            new_position = position + offset
-        print(position)
+#        print(position)
 #        print(new_position)
 #        print(offset)
         if(position < low or position > upp):
