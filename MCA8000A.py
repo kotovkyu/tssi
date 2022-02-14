@@ -2,6 +2,9 @@ import serial
 import timeit
 import numpy as np
 
+
+
+
 # time.sleep is unreliable
 def wait (delay=0.2) :
     timeout = timeit.default_timer () + delay
@@ -114,7 +117,7 @@ class MCA8000A :
         self.isMacFTDI = isMacFTDI
         # should probably get rid of it
         self.serial_connection = serial.Serial \
-            (self.device_path, baudrate=4800, parity='E',
+            (self.device_path, baudrate=115200, parity='E',
              timeout=0.2, write_timeout=0.2)
         self.oldcts = self.serial_connection.cts
         self.olddsr = self.serial_connection.dsr
@@ -152,6 +155,10 @@ class MCA8000A :
 
     def SetDTR (self) :
         self.serial_connection.dtr = True
+
+    def ToggleDTR (self) :
+        self.serial_connection.dtr = ~self.serial_connection.dtr
+
 
     def PurgeRX (self) :
         self.serial_connection.reset_input_buffer ()
@@ -305,46 +312,54 @@ class MCA8000A :
             
         self.ResetDTR()
             # set RTS and check for CTS flip
-        self.SetRTS ()
+#        self.SetRTS ()
 #        self.SetDTR ()
         for i in range (n_retries) :
-            if self.debug : print ("Retry number {}".format (i))
+            if self.debug : print ("SendCommand: Retry number {}".format (i))
+
+            self.SetRTS () # Prepare PMCA to receive command
 
             if self.is_USB_MCA:
                 if self.WaitForCTSFlip () :
                     if self.debug : print ("First CTS flip failed")
-                    self.ResetRTS ()
+                    #self.ResetRTS ()
                     continue # retry
-            else:
-                if self.WaitForDSRFlip () :
-                    if self.debug : print ("First DSR flip failed")
-                    self.ResetRTS ()
-                    #self.ResetDTR ()
-                    continue # retry                
-            # send data
-            #self.serial_connection.write (command)
-                    self.SendCommandBytes (command)
-            
-            if self.WaitToSendData () :
-                if self.debug : print ("Writing data failed")
-                self.ResetRTS ()
-#                self.ResetDTR ()
-                continue # retry
-            
             # make sure the buffer for receiving MCA data is cleared
-            self.PurgeRX ()
+                self.PurgeRX ()
 
             # check for 2nd CTS flip
-            if self.WaitForCTSFlip () :
-                if self.debug : print ("Second CTS flip failed")
-                self.ResetRTS ()
-                continue # retry
-
-
-            self.PurgeRX () # apparently sometimes an extra byte shows up early?
-            # end transmission
-            self.ResetRTS ()
+                if self.WaitForCTSFlip () :
+                    if self.debug : print ("Second CTS flip failed")
+                    #self.ResetRTS ()
+                    #continue # retry
+            else:
+                #for i in range (len (commandbytes)) :
+                if self.WaitForDSRFlip () :
+                    if self.debug : print ("First DSR flip failed")
+                    #self.ResetRTS ()
+                    #self.ResetDTR ()
+                    continue # retry  
+                                  
+            # send data
+            #self.serial_connection.write (command)
+                self.SendCommandBytes (command)
+                if self.WaitForDSRFlip () :
+                    if self.debug : print ("Second DSR flip failed")
+                    
+            self.ResetRTS () # Tell PMCA to exit the receive state
             
+            if self.is_USB_MCA==False:
+                wait(0.02)
+                            
+#            if self.WaitToSendData () :
+#                if self.debug : print ("Writing data failed")
+#                self.ResetRTS ()
+#                self.ResetDTR ()
+#                continue # retry
+#            self.PurgeRX () # apparently sometimes an extra byte shows up early?
+            # end transmission
+#            self.ResetRTS ()
+           
             return 0 # sending command succeeded
 
         print ("Sending command failed")
@@ -397,6 +412,8 @@ class MCA8000A :
         #self.serial_connection.rts = False # should already be zero
         wait (0.2)
 
+        print ("BaudRate: command already send.")
+
         self.PurgeRX () # throw out whatever's in there
 
         self.ReceiveStatusFromPrompt ()
@@ -408,22 +425,19 @@ class MCA8000A :
 
     def PromptForStatus (self) :
 
-        self.ResetRTS ()
-        self.ResetDTR ()
+        self.ResetRTS () # First clear RTS to make sure that PMCA is in the send state
         wait (0.0002)
         # could add a line to ensure oldcts is set
         # could add a check for serial connection status
+        
         self.SetRTS ()
-        self.SetDTR ()
         
         if self.is_USB_MCA:
             stat = self.WaitForCTSFlip ()
+            self.PurgeRX ()        
         else:
             stat = self.WaitForDSRFlip ()
-            print("Prompt for Status")
-        self.PurgeRX ()
         self.ResetRTS ()
-        self.ResetDTR ()
         wait (0.0002)
         return stat
 
@@ -445,6 +459,7 @@ class MCA8000A :
         return stat
 
     def ReceiveStatus (self, hasSerialNumber=False) :
+        print ("ReceiveStatus: receive status data...")
         stat, StatusData = self.ReceiveData (20)
         if stat:
             print ("ReceiveStatus: error getting status bytes")
@@ -516,15 +531,36 @@ class MCA8000A :
     # returns status and data
     # if status is bad don't use data
     def ReceiveData (self, nbytes, delay=0.2) :
+    
+        if self.is_USB_MCA:
+            delay = 0.75 # time out in 0.75 second
+        else:
+            delay = 0.5
+                       
         timeout = timeit.default_timer () + delay
         outdata = bytearray ()
+        
+        
+        divisor = 115200 // 115200
+        byteTime = divisor * (15000000.0 / 115200);
+        
+        if self.is_USB_MCA==False:
+            self.PurgeRX ()   
+        
         while (True) :
             available = self.serial_connection.in_waiting
             if (available) :
+                if self.is_USB_MCA==False:
+                    print ("ReceiveData: ToggleDTR")
+                    for i in range(0,nbytes):
+                        self.ToggleDTR()
+                        wait(0.0001)
+                print ("ReceiveData: reading...")                        
                 timeout = timeit.default_timer () + delay # reset timer
                 # read whatever you can get, but don't go over nbytes
                 nbytes_to_get = min (available, nbytes - len (outdata))
                 outdata += self.serial_connection.read (nbytes_to_get)
+                print ("ReceiveData: data %s" % outdata)                                        
             if timeit.default_timer () > timeout :
                 print ("ReceiveData: read timeout")
                 return 1, None  # failure
@@ -705,6 +741,7 @@ class MCA8000A :
         if stat :
             print ("StartAcquisition: error sending command")
             return stat
+        print ("StartAcquisition: command already send")
         wait (delay)
         stat = self.ReceiveStatusFromPrompt ()
         if stat :
@@ -720,6 +757,7 @@ class MCA8000A :
         if stat :
             print ("StopAcquisition: error sending command")
             return stat
+        print ("StopAcquisition: command already send")
         wait (delay)
         stat = self.ReceiveStatusFromPrompt ()
         if stat :
@@ -800,10 +838,10 @@ def test_mca():
   mca = MCA8000A("/dev/ttyUSB0")
   mca.debug = True
   
-#  mca.PowerOn()
-  #mca.Initialize()
+  #mca.PowerOn()
+  mca.Initialize()
 
-#  mca.PrintStatus()    
+  mca.PrintStatus()    
 #  mca.PromptForStatus()
 #  print("ReceiveStatusFromPrompt= %s" % mca.ReceiveStatusFromPrompt())
   
@@ -811,7 +849,7 @@ def test_mca():
   
   mca.StartAcquisition()
 #  mca.ReceiveChannelData()
-#  mca.StopAcquisition()  
+  mca.StopAcquisition()  
     
     # to be implemented
     
