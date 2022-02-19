@@ -54,6 +54,27 @@ def Command_SendData (start_channel, words_requested,
     command = bytearray ([command_byte, byte1, byte2, byte3])
     return addCheckSum (command)
     
+def Command_SendDataOld (start_channel, upper=False, group=False):
+    # should only call with int
+    if not isinstance (start_channel, int) :
+        raise TypeError ('StartChannelNotInt')
+    # need to verify that the arguments are in bounds
+    if start_channel > 16383:
+        raise ValueError ('StartChannelHigh')
+    if start_channel < 0 :
+        raise ValueError ('StartChannelLow')
+    command_byte = 0 # SEND DATA AND CHECK SUM COMMAND
+    n = 0 # lower
+    if upper : n = 2
+    if group : command_byte = 16 # SEND DATA, GROUP AND S/N COMMAND
+    val = start_channel*4 + n
+    byte1, byte2 = val.to_bytes(2, byteorder="big")
+    byte3 = 0
+    if group : byte3 = 1
+    command = bytearray ([command_byte, byte1, byte2, byte3])
+    return addCheckSum (command)
+    
+    
 def Command_Control (flags, threshold) :
     # should check type of flags (needs to be 1 byte)
     if not isinstance (threshold, int) :
@@ -142,7 +163,7 @@ class MCA8000A :
         self.isBackupBatteryBad = False
         # data
         self.ChannelData = None
-
+        self.ChannelDataFloat = None
         
     def ResetRTS (self) :
         self.serial_connection.rts = False
@@ -337,6 +358,7 @@ class MCA8000A :
 #            self.SetDTR ()
 
             if self.is_USB_MCA:
+                if self.debug : print ("SendCommand: AHTUNG !!!")
                 if self.WaitForCTSFlip () :
                     if self.debug : print ("SendCommand: First CTS flip failed")
                     #self.ResetRTS ()
@@ -456,6 +478,7 @@ class MCA8000A :
         self.SetRTS ()
         
         if self.is_USB_MCA:
+            print("AHTUNG!!!")
             stat = self.WaitForCTSFlip ()
             self.PurgeRX ()        
         else:
@@ -530,6 +553,9 @@ class MCA8000A :
                 for i in range (20) : # 20 ?
                     print (data[i])
             return 1 # failure
+        #for i in range (20) : # 20 ?
+        #    print (data[i])
+
         #should do something with checksum if hasSerialNumber=False
         if hasSerialNumber :
             self.SerialNumber = int.from_bytes (data[0:2], "big")
@@ -565,13 +591,11 @@ class MCA8000A :
     # returns status and data
     # if status is bad don't use data
     def ReceiveData (self, nbytes, delay=0.2) :
-    
-
-    
-        self.ResetRTS()
 
         if self.is_USB_MCA==False:
             self.PurgeRX ()   
+
+        self.ResetRTS()
 
         self.ResetDTR() # Magic ???
     
@@ -637,6 +661,9 @@ class MCA8000A :
         start_channel = 0
         # first get the lower words
         comm = Command_SendData (start_channel, words_requested)
+
+        print ("ReceiveChannelData: first get the lower words")
+
         stat = self.SendCommand (comm)
         if stat :
             print ("ReceiveChannelData1: error sending command")
@@ -649,6 +676,10 @@ class MCA8000A :
             print ("ReceiveChannelData1: error receiving data")
             return stat
         lowerdatachecksum = sum (lowerdata) % (2**16) # Amptek's prescription
+
+        self.SetRTS () # Magic ???
+        print ("ReceiveChannelData: now get the upper words")
+        
         # now get the upper words
         comm = Command_SendData (start_channel, words_requested, upper=True)
         stat = self.SendCommand (comm)
@@ -695,6 +726,102 @@ class MCA8000A :
         upper = np.frombuffer (upperdata, dtype=np.int16)
         self.ChannelData = lower + upper * 2**16
         return 0
+
+
+    def ReceiveChannelDataOld (self) :
+        # this only works for resolution 1024 or below
+        # I see unexpected behavior for the get data commands
+        # when it's called with parameters other than 0,1024
+        # and even for that parameter, I see weird data for
+        # high channel numbers > 1000
+#        words_requested = min (self.ADCResolution, 1024)
+        words_requested = 1024*2
+        start_channel = 0
+        # first get the lower words
+        comm = Command_SendDataOld (start_channel, group=True)
+
+        print ("ReceiveChannelData: first get the lower words")
+        stat = self.SendCommand (comm)
+        if stat :
+            print ("ReceiveChannelData1: error sending command")
+            return stat
+        wait(1)
+        stat = self.PromptForStatus ()
+        stat = self.ReceiveStatusWithRetry ()
+#        stat = self.ReceiveStatus () # no S/N
+        if stat :
+            print ("ReceiveChannelData1: failed getting status")
+        #stat = self.PromptForStatus ()
+        stat, lowerdata = self.ReceiveData (words_requested)
+        if stat :
+            print ("ReceiveChannelData1: error receiving data")
+            return stat
+        lowerdatachecksum = sum (lowerdata) % (2**16) # Amptek's prescription
+
+        print(lowerdata)
+
+        self.SetRTS()
+
+        comm = Command_SendDataOld (start_channel, group=True)
+        print ("ReceiveChannelData: try to get final status")
+        stat = self.SendCommand (comm)
+        if stat :
+            print ("ReceiveChannelData1: error sending command")
+            return stat
+        stat = self.PromptForStatus ()
+        stat = self.ReceiveStatus () # no S/N
+        if stat :
+            print ("ReceiveChannelData1: failed getting final status")
+
+
+        self.SetRTS()
+        
+        # second get the upper words
+        comm = Command_SendDataOld (start_channel, group=True, upper=True)
+
+        print ("ReceiveChannelData: second get the upper words")
+        stat = self.SendCommand (comm)
+        if stat :
+            print ("ReceiveChannelData2: error sending command")
+            return stat
+        wait(1)
+        stat = self.PromptForStatus ()
+        stat = self.ReceiveStatusWithRetry ()
+#        stat = self.ReceiveStatus () # no S/N
+        if stat :
+            print ("ReceiveChannelData2: failed getting status")
+        #stat = self.PromptForStatus ()
+        stat, upperdata = self.ReceiveData (words_requested)
+        if stat :
+            print ("ReceiveChannelData2: error receiving data")
+            return stat
+        upperdatachecksum = sum (lowerdata) % (2**16) # Amptek's prescription
+
+        print(upperdata)
+
+        self.SetRTS()
+
+        comm = Command_SendDataOld (start_channel, group=True)
+        print ("ReceiveChannelData2: try to get final status")
+        stat = self.SendCommand (comm)
+        if stat :
+            print ("ReceiveChannelData2: error sending command")
+            return stat
+        stat = self.PromptForStatus ()
+        stat = self.ReceiveStatus () # no S/N
+        if stat :
+            print ("ReceiveChannelData2: failed getting final status")
+
+        lower = np.frombuffer (lowerdata, dtype=np.int16)
+        upper = np.frombuffer (upperdata, dtype=np.int16)
+        self.ChannelData = lower + upper * 2**16
+        self.ChannelDataFloat = (lower + upper * 2**16)/4294967295
+
+
+        return 0
+
+
+
         
     def SetThreshold (self, threshold) :
         # user existing flags variable
@@ -912,27 +1039,40 @@ class MCA8000A :
         self.SetThreshold(50)
 
         self.SetRTS () # Magic ???
-
+        wait(0.2)
         print("Initialize: Try to set threshold3")
-        self.SetThreshold(53)
+        self.SetThreshold(1000)
 
 
         self.SetRTS () # Magic ???
-
         print("Initialize: Try to START...")
         self.StartAcquisition()
 
         wait(3)
         
+        
+        self.SetRTS () # Magic ???
+        wait(0.2)
+        print("Initialize: Try to RECEIVE...")
+        self.ReceiveChannelDataOld()
+
         self.SetRTS () # Magic ???
 
         print("Initialize: Try to STOP...")
         self.StopAcquisition()
-        
-        self.SetRTS () # Magic ???
 
-        self.ReceiveChannelData()
+
         
+        print(self.ChannelData)
+        
+        
+        file = open('test.dat','w')
+        
+        for i in range(0,len(self.ChannelDataFloat)):
+            file.write("%s\n" % self.ChannelDataFloat[i])
+        file.close()
+            
+#        print(self.ChannelDataFloat)
 
 
         return 0
